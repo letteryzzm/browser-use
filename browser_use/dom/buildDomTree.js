@@ -1,3 +1,4 @@
+    //接受配置参数
 (
   args = {
     doHighlightElements: true,
@@ -6,17 +7,23 @@
     debugMode: false,
   }
 ) => {
-  const { doHighlightElements, focusHighlightIndex, viewportExpansion, debugMode } = args;
+  const {
+    doHighlightElements,
+    focusHighlightIndex,
+    viewportExpansion,
+    debugMode,
+  } = args;
   let highlightIndex = 0; // Reset highlight index
 
-  // Add timing stack to handle recursion
+  // Add timing stack to handle recursion；添加计时堆栈来处理递归
   const TIMING_STACK = {
     nodeProcessing: [],
     treeTraversal: [],
     highlighting: [],
-    current: null
+    current: null,
   };
 
+  //通过推入/弹出时间戳来帮助跟踪计时指标，以计算持续时间。
   function pushTiming(type) {
     TIMING_STACK[type] = TIMING_STACK[type] || [];
     TIMING_STACK[type].push(performance.now());
@@ -28,49 +35,51 @@
     return duration;
   }
 
-  // Only initialize performance tracking if in debug mode
-  const PERF_METRICS = debugMode ? {
-    buildDomTreeCalls: 0,
-    timings: {
-      buildDomTree: 0,
-      highlightElement: 0,
-      isInteractiveElement: 0,
-      isElementVisible: 0,
-      isTopElement: 0,
-      isInExpandedViewport: 0,
-      isTextNodeVisible: 0,
-      getEffectiveScroll: 0,
-    },
-    cacheMetrics: {
-      boundingRectCacheHits: 0,
-      boundingRectCacheMisses: 0,
-      computedStyleCacheHits: 0,
-      computedStyleCacheMisses: 0,
-      getBoundingClientRectTime: 0,
-      getComputedStyleTime: 0,
-      boundingRectHitRate: 0,
-      computedStyleHitRate: 0,
-      overallHitRate: 0,
-    },
-    nodeMetrics: {
-      totalNodes: 0,
-      processedNodes: 0,
-      skippedNodes: 0,
-    },
-    buildDomTreeBreakdown: {
-      totalTime: 0,
-      totalSelfTime: 0,
-      buildDomTreeCalls: 0,
-      domOperations: {
-        getBoundingClientRect: 0,
-        getComputedStyle: 0,
-      },
-      domOperationCounts: {
-        getBoundingClientRect: 0,
-        getComputedStyle: 0,
+  // Only initialize performance tracking if in debug mode仅在调试模式下初始化性能打点
+  const PERF_METRICS = debugMode
+    ? {
+        buildDomTreeCalls: 0,
+        timings: {
+          buildDomTree: 0,
+          highlightElement: 0,
+          isInteractiveElement: 0,
+          isElementVisible: 0,
+          isTopElement: 0,
+          isInExpandedViewport: 0,
+          isTextNodeVisible: 0,
+          getEffectiveScroll: 0,
+        },
+        cacheMetrics: {
+          boundingRectCacheHits: 0,
+          boundingRectCacheMisses: 0,
+          computedStyleCacheHits: 0,
+          computedStyleCacheMisses: 0,
+          getBoundingClientRectTime: 0,
+          getComputedStyleTime: 0,
+          boundingRectHitRate: 0,
+          computedStyleHitRate: 0,
+          overallHitRate: 0,
+        },
+        nodeMetrics: {
+          totalNodes: 0,
+          processedNodes: 0,
+          skippedNodes: 0,
+        },
+        buildDomTreeBreakdown: {
+          totalTime: 0,
+          totalSelfTime: 0,
+          buildDomTreeCalls: 0,
+          domOperations: {
+            getBoundingClientRect: 0,
+            getComputedStyle: 0,
+          },
+          domOperationCounts: {
+            getBoundingClientRect: 0,
+            getComputedStyle: 0,
+          },
+        },
       }
-    }
-  } : null;
+    : null;
 
   // Simple timing helper that only runs in debug mode
   function measureTime(fn) {
@@ -91,7 +100,10 @@
     const result = operation();
     const duration = performance.now() - start;
 
-    if (PERF_METRICS && name in PERF_METRICS.buildDomTreeBreakdown.domOperations) {
+    if (
+      PERF_METRICS &&
+      name in PERF_METRICS.buildDomTreeBreakdown.domOperations
+    ) {
       PERF_METRICS.buildDomTreeBreakdown.domOperations[name] += duration;
       PERF_METRICS.buildDomTreeBreakdown.domOperationCounts[name]++;
     }
@@ -106,7 +118,7 @@
     clearCache: () => {
       DOM_CACHE.boundingRects = new WeakMap();
       DOM_CACHE.computedStyles = new WeakMap();
-    }
+    },
   };
 
   // Cache helper functions
@@ -130,8 +142,10 @@
       rect = element.getBoundingClientRect();
       const duration = performance.now() - start;
       if (PERF_METRICS) {
-        PERF_METRICS.buildDomTreeBreakdown.domOperations.getBoundingClientRect += duration;
-        PERF_METRICS.buildDomTreeBreakdown.domOperationCounts.getBoundingClientRect++;
+        PERF_METRICS.buildDomTreeBreakdown.domOperations.getBoundingClientRect +=
+          duration;
+        PERF_METRICS.buildDomTreeBreakdown.domOperationCounts
+          .getBoundingClientRect++;
       }
     } else {
       rect = element.getBoundingClientRect();
@@ -163,8 +177,10 @@
       style = window.getComputedStyle(element);
       const duration = performance.now() - start;
       if (PERF_METRICS) {
-        PERF_METRICS.buildDomTreeBreakdown.domOperations.getComputedStyle += duration;
-        PERF_METRICS.buildDomTreeBreakdown.domOperationCounts.getComputedStyle++;
+        PERF_METRICS.buildDomTreeBreakdown.domOperations.getComputedStyle +=
+          duration;
+        PERF_METRICS.buildDomTreeBreakdown.domOperationCounts
+          .getComputedStyle++;
       }
     } else {
       style = window.getComputedStyle(element);
@@ -212,7 +228,7 @@
       // Get element position
       const rect = measureDomOperation(
         () => element.getBoundingClientRect(),
-        'getBoundingClientRect'
+        "getBoundingClientRect"
       );
 
       if (!rect) return index;
@@ -314,7 +330,10 @@
         let newLabelTop = newTop + 2;
         let newLabelLeft = newLeft + newRect.width - labelWidth - 2;
 
-        if (newRect.width < labelWidth + 4 || newRect.height < labelHeight + 4) {
+        if (
+          newRect.width < labelWidth + 4 ||
+          newRect.height < labelHeight + 4
+        ) {
           newLabelTop = newTop - labelHeight - 2;
           newLabelLeft = newLeft + newRect.width - labelWidth;
         }
@@ -323,12 +342,12 @@
         label.style.left = `${newLabelLeft}px`;
       };
 
-      window.addEventListener('scroll', updatePositions);
-      window.addEventListener('resize', updatePositions);
+      window.addEventListener("scroll", updatePositions);
+      window.addEventListener("resize", updatePositions);
 
       return index + 1;
     } finally {
-      popTiming('highlighting');
+      popTiming("highlighting");
     }
   }
 
@@ -398,20 +417,25 @@
       if (!parentElement) return false;
 
       try {
-        return isInViewport && parentElement.checkVisibility({
-          checkOpacity: true,
-          checkVisibilityCSS: true,
-        });
+        return (
+          isInViewport &&
+          parentElement.checkVisibility({
+            checkOpacity: true,
+            checkVisibilityCSS: true,
+          })
+        );
       } catch (e) {
         // Fallback if checkVisibility is not supported
         const style = window.getComputedStyle(parentElement);
-        return isInViewport &&
-          style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          style.opacity !== '0';
+        return (
+          isInViewport &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          style.opacity !== "0"
+        );
       }
     } catch (e) {
-      console.warn('Error checking text node visibility:', e);
+      console.warn("Error checking text node visibility:", e);
       return false;
     }
   }
@@ -422,7 +446,14 @@
 
     // Always accept body and common container elements
     const alwaysAccept = new Set([
-      "body", "div", "main", "article", "section", "nav", "header", "footer"
+      "body",
+      "div",
+      "main",
+      "article",
+      "section",
+      "nav",
+      "header",
+      "footer",
     ]);
     const tagName = element.tagName.toLowerCase();
 
@@ -464,27 +495,25 @@
 
     // Special handling for cookie banner elements
     const isCookieBannerElement =
-      (typeof element.closest === 'function') && (
-        element.closest('[id*="onetrust"]') ||
+      typeof element.closest === "function" &&
+      (element.closest('[id*="onetrust"]') ||
         element.closest('[class*="onetrust"]') ||
         element.closest('[data-nosnippet="true"]') ||
-        element.closest('[aria-label*="cookie"]')
-      );
+        element.closest('[aria-label*="cookie"]'));
 
     if (isCookieBannerElement) {
       // Check if it's a button or interactive element within the banner
       if (
-        element.tagName.toLowerCase() === 'button' ||
-        element.getAttribute('role') === 'button' ||
+        element.tagName.toLowerCase() === "button" ||
+        element.getAttribute("role") === "button" ||
         element.onclick ||
-        element.getAttribute('onclick') ||
-        (element.classList && (
-          element.classList.contains('ot-sdk-button') ||
-          element.classList.contains('accept-button') ||
-          element.classList.contains('reject-button')
-        )) ||
-        element.getAttribute('aria-label')?.toLowerCase().includes('accept') ||
-        element.getAttribute('aria-label')?.toLowerCase().includes('reject')
+        element.getAttribute("onclick") ||
+        (element.classList &&
+          (element.classList.contains("ot-sdk-button") ||
+            element.classList.contains("accept-button") ||
+            element.classList.contains("reject-button"))) ||
+        element.getAttribute("aria-label")?.toLowerCase().includes("accept") ||
+        element.getAttribute("aria-label")?.toLowerCase().includes("reject")
       ) {
         return true;
       }
@@ -492,12 +521,60 @@
 
     // Base interactive elements and roles
     const interactiveElements = new Set([
-      "a", "button", "details", "embed", "input", "menu", "menuitem",
-      "object", "select", "textarea", "canvas", "summary", "dialog",
-      "banner"
+      "a",
+      "button",
+      "details",
+      "embed",
+      "input",
+      "menu",
+      "menuitem",
+      "object",
+      "select",
+      "textarea",
+      "canvas",
+      "summary",
+      "dialog",
+      "banner",
     ]);
 
-    const interactiveRoles = new Set(['button-icon', 'dialog', 'button-text-icon-only', 'treeitem', 'alert', 'grid', 'progressbar', 'radio', 'checkbox', 'menuitem', 'option', 'switch', 'dropdown', 'scrollbar', 'combobox', 'a-button-text', 'button', 'region', 'textbox', 'tabpanel', 'tab', 'click', 'button-text', 'spinbutton', 'a-button-inner', 'link', 'menu', 'slider', 'listbox', 'a-dropdown-button', 'button-icon-only', 'searchbox', 'menuitemradio', 'tooltip', 'tree', 'menuitemcheckbox']);
+    const interactiveRoles = new Set([
+      "button-icon",
+      "dialog",
+      "button-text-icon-only",
+      "treeitem",
+      "alert",
+      "grid",
+      "progressbar",
+      "radio",
+      "checkbox",
+      "menuitem",
+      "option",
+      "switch",
+      "dropdown",
+      "scrollbar",
+      "combobox",
+      "a-button-text",
+      "button",
+      "region",
+      "textbox",
+      "tabpanel",
+      "tab",
+      "click",
+      "button-text",
+      "spinbutton",
+      "a-button-inner",
+      "link",
+      "menu",
+      "slider",
+      "listbox",
+      "a-dropdown-button",
+      "button-icon-only",
+      "searchbox",
+      "menuitemradio",
+      "tooltip",
+      "tree",
+      "menuitemcheckbox",
+    ]);
 
     const tagName = element.tagName.toLowerCase();
     const role = element.getAttribute("role");
@@ -505,18 +582,19 @@
     const tabIndex = element.getAttribute("tabindex");
 
     // Add check for specific class
-    const hasAddressInputClass = element.classList && (
-      element.classList.contains("address-input__container__input") ||
-      element.classList.contains("nav-btn") ||
-      element.classList.contains("pull-left")
-    );
+    const hasAddressInputClass =
+      element.classList &&
+      (element.classList.contains("address-input__container__input") ||
+        element.classList.contains("nav-btn") ||
+        element.classList.contains("pull-left"));
 
     // Added enhancement to capture dropdown interactive elements
-    if (element.classList && (
-      element.classList.contains('dropdown-toggle') ||
-      element.getAttribute('data-toggle') === 'dropdown' ||
-      element.getAttribute('aria-haspopup') === 'true'
-    )) {
+    if (
+      element.classList &&
+      (element.classList.contains("dropdown-toggle") ||
+        element.getAttribute("data-toggle") === "dropdown" ||
+        element.getAttribute("aria-haspopup") === "true")
+    ) {
       return true;
     }
 
@@ -536,39 +614,39 @@
 
     // Additional checks for cookie banners and consent UI
     const isCookieBanner =
-      element.id?.toLowerCase().includes('cookie') ||
-      element.id?.toLowerCase().includes('consent') ||
-      element.id?.toLowerCase().includes('notice') ||
-      (element.classList && (
-        element.classList.contains('otCenterRounded') ||
-        element.classList.contains('ot-sdk-container')
-      )) ||
-      element.getAttribute('data-nosnippet') === 'true' ||
-      element.getAttribute('aria-label')?.toLowerCase().includes('cookie') ||
-      element.getAttribute('aria-label')?.toLowerCase().includes('consent') ||
-      (element.tagName.toLowerCase() === 'div' && (
-        element.id?.includes('onetrust') ||
-        (element.classList && (
-          element.classList.contains('onetrust') ||
-          element.classList.contains('cookie') ||
-          element.classList.contains('consent')
-        ))
-      ));
+      element.id?.toLowerCase().includes("cookie") ||
+      element.id?.toLowerCase().includes("consent") ||
+      element.id?.toLowerCase().includes("notice") ||
+      (element.classList &&
+        (element.classList.contains("otCenterRounded") ||
+          element.classList.contains("ot-sdk-container"))) ||
+      element.getAttribute("data-nosnippet") === "true" ||
+      element.getAttribute("aria-label")?.toLowerCase().includes("cookie") ||
+      element.getAttribute("aria-label")?.toLowerCase().includes("consent") ||
+      (element.tagName.toLowerCase() === "div" &&
+        (element.id?.includes("onetrust") ||
+          (element.classList &&
+            (element.classList.contains("onetrust") ||
+              element.classList.contains("cookie") ||
+              element.classList.contains("consent")))));
 
     if (isCookieBanner) return true;
 
     // Additional check for buttons in cookie banners
-    const isInCookieBanner = typeof element.closest === 'function' && element.closest(
-      '[id*="cookie"],[id*="consent"],[class*="cookie"],[class*="consent"],[id*="onetrust"]'
-    );
+    const isInCookieBanner =
+      typeof element.closest === "function" &&
+      element.closest(
+        '[id*="cookie"],[id*="consent"],[class*="cookie"],[class*="consent"],[id*="onetrust"]'
+      );
 
-    if (isInCookieBanner && (
-      element.tagName.toLowerCase() === 'button' ||
-      element.getAttribute('role') === 'button' ||
-      (element.classList && element.classList.contains('button')) ||
-      element.onclick ||
-      element.getAttribute('onclick')
-    )) {
+    if (
+      isInCookieBanner &&
+      (element.tagName.toLowerCase() === "button" ||
+        element.getAttribute("role") === "button" ||
+        (element.classList && element.classList.contains("button")) ||
+        element.onclick ||
+        element.getAttribute("onclick"))
+    ) {
       return true;
     }
 
@@ -628,11 +706,13 @@
       element.hasAttribute("aria-selected") ||
       element.hasAttribute("aria-checked");
 
-    const isContentEditable = element.getAttribute("contenteditable") === "true" ||
+    const isContentEditable =
+      element.getAttribute("contenteditable") === "true" ||
       element.isContentEditable ||
       element.id === "tinymce" ||
       element.classList.contains("mce-content-body") ||
-      (element.tagName.toLowerCase() === "body" && element.getAttribute("data-id")?.startsWith("mce_"));
+      (element.tagName.toLowerCase() === "body" &&
+        element.getAttribute("data-id")?.startsWith("mce_"));
 
     // Check if element is draggable
     const isDraggable =
@@ -654,12 +734,11 @@
     const rect = getCachedBoundingRect(element);
 
     // If element is not in viewport, consider it top
-    const isInViewport = (
+    const isInViewport =
       rect.left < window.innerWidth &&
       rect.right > 0 &&
       rect.top < window.innerHeight &&
-      rect.bottom > 0
-    );
+      rect.bottom > 0;
 
     if (!isInViewport) {
       return true;
@@ -682,7 +761,7 @@
       try {
         const topEl = measureDomOperation(
           () => shadowRoot.elementFromPoint(centerX, centerY),
-          'elementFromPoint'
+          "elementFromPoint"
         );
         if (!topEl) return false;
 
@@ -754,7 +833,7 @@
       scrollY += window.scrollY;
 
       return { scrollX, scrollY };
-    }, 'scrollOperations');
+    }, "scrollOperations");
   }
 
   // Add these helper functions at the top level
@@ -765,13 +844,20 @@
 
     // Fast-path for common interactive elements
     const interactiveElements = new Set([
-      "a", "button", "input", "select", "textarea", "details", "summary"
+      "a",
+      "button",
+      "input",
+      "select",
+      "textarea",
+      "details",
+      "summary",
     ]);
 
     if (interactiveElements.has(tagName)) return true;
 
     // Quick attribute checks without getting full lists
-    const hasQuickInteractiveAttr = element.hasAttribute("onclick") ||
+    const hasQuickInteractiveAttr =
+      element.hasAttribute("onclick") ||
       element.hasAttribute("role") ||
       element.hasAttribute("tabindex") ||
       element.hasAttribute("aria-") ||
@@ -782,11 +868,13 @@
 
   function quickVisibilityCheck(element) {
     // Fast initial check before expensive getComputedStyle
-    return element.offsetWidth > 0 &&
+    return (
+      element.offsetWidth > 0 &&
       element.offsetHeight > 0 &&
       !element.hasAttribute("hidden") &&
       element.style.display !== "none" &&
-      element.style.visibility !== "hidden";
+      element.style.visibility !== "hidden"
+    );
   }
 
   /**
@@ -794,40 +882,47 @@
    */
   function buildDomTree(node, parentIframe = null) {
     if (debugMode) PERF_METRICS.nodeMetrics.totalNodes++;
-
+    //如果启用了调试模式，增加总节点计数器，记录处理了多少节点。
     if (!node || node.id === HIGHLIGHT_CONTAINER_ID) {
       if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
       return null;
     }
-
-    // Special handling for root node (body)
+    //如果节点不存在或是高亮容器本身，跳过处理并返回null。这避免了处理不需要的节点或形成循环引用。
+    // Special handling for root node (body)检查是否是文档的body元素（根节点），这需要特殊处理。
     if (node === document.body) {
       const nodeData = {
-        tagName: 'body',
+        tagName: "body",
         attributes: {},
-        xpath: '/body',
+        xpath: "/body",
         children: [],
       };
-
+      //为body创建一个基本的节点数据对象，包含标签名、属性（初始为空）、XPath路径和空的子节点数组。
       // Process children of body
       for (const child of node.childNodes) {
         const domElement = buildDomTree(child, parentIframe);
         if (domElement) nodeData.children.push(domElement);
       }
+      //递归处理body的所有子节点，如果子节点处理返回有效ID（非null），则添加到children数组。
 
       const id = `${ID.current++}`;
       DOM_HASH_MAP[id] = nodeData;
+      //为body节点分配唯一ID，并将节点数据存储在全局哈希映射中。ID通过自增计数器生成
       if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
-      return id;
+      return id; //调试模式下，增加已处理节点计数，然后返回节点ID作为引用
     }
 
     // Early bailout for non-element nodes except text
-    if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.TEXT_NODE) {
+    //如果节点既不是元素节点也不是文本节点（如注释节点），立即跳过处理。这是一个优化，避免处理不相关的节点类型。
+    if (
+      node.nodeType !== Node.ELEMENT_NODE &&
+      node.nodeType !== Node.TEXT_NODE
+    ) {
       if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
       return null;
     }
 
-    // Process text nodes
+    // Process text nodes检查是否为文本节点，需要特殊处理。
+    //提取并修剪文本内容，如果为空，则跳过。这避免了处理空白文本。
     if (node.nodeType === Node.TEXT_NODE) {
       const textContent = node.textContent.trim();
       if (!textContent) {
@@ -836,12 +931,13 @@
       }
 
       // Only check visibility for text nodes that might be visible
+      //检查文本节点的父元素，如果没有父元素或父元素是script标签，则跳过（脚本中的文本不需要处理）。
       const parentElement = node.parentElement;
-      if (!parentElement || parentElement.tagName.toLowerCase() === 'script') {
+      if (!parentElement || parentElement.tagName.toLowerCase() === "script") {
         if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
         return null;
       }
-
+      //为文本节点分配ID，并存储其类型、内容和可见性信息。调用isTextNodeVisible检查文本是否可见。
       const id = `${ID.current++}`;
       DOM_HASH_MAP[id] = {
         type: "TEXT_NODE",
@@ -849,30 +945,34 @@
         isVisible: isTextNodeVisible(node),
       };
       if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
-      return id;
+      return id; //更新计数器并返回ID。
     }
 
     // Quick checks for element nodes
+    //如果是元素节点，调用isElementAccepted检查是否应该处理该元素。这过滤掉了不需要的元素类型（如SVG、脚本等）。
     if (node.nodeType === Node.ELEMENT_NODE && !isElementAccepted(node)) {
       if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
       return null;
     }
-
+    //如果设置了视口扩展参数（不等于-1），检查元素是否在扩展的视口内。
     // Check viewport if needed
+    //获取元素的边界矩形（使用缓存优化），如果元素完全超出扩展视口范围，则跳过处理。这是一个重要的性能优化。
     if (viewportExpansion !== -1) {
       const rect = getCachedBoundingRect(node);
-      if (!rect || (
+      if (
+        !rect ||
         rect.bottom < -viewportExpansion ||
         rect.top > window.innerHeight + viewportExpansion ||
         rect.right < -viewportExpansion ||
         rect.left > window.innerWidth + viewportExpansion
-      )) {
+      ) {
         if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
         return null;
       }
     }
 
     // Process element node
+    //创建元素节点的数据对象，包含小写标签名、空属性对象、XPath和空子节点数组
     const nodeData = {
       tagName: node.tagName.toLowerCase(),
       attributes: {},
@@ -881,7 +981,12 @@
     };
 
     // Get attributes for interactive elements or potential text containers
-    if (isInteractiveCandidate(node) || node.tagName.toLowerCase() === 'iframe' || node.tagName.toLowerCase() === 'body') {
+    //仅为交互式元素、iframe或body收集属性，这是性能优化的一部分。通过getAttributeNames获取所有属性名，然后获取每个属性值。
+    if (
+      isInteractiveCandidate(node) ||
+      node.tagName.toLowerCase() === "iframe" ||
+      node.tagName.toLowerCase() === "body"
+    ) {
       const attributeNames = node.getAttributeNames?.() || [];
       for (const name of attributeNames) {
         nodeData.attributes[name] = node.getAttribute(name);
@@ -890,17 +995,18 @@
 
     // if (isInteractiveCandidate(node)) {
 
-    // Check interactivity
+    // Check interactivity只对元素节点检查交互性。
     if (node.nodeType === Node.ELEMENT_NODE) {
-      nodeData.isVisible = isElementVisible(node);
+      nodeData.isVisible = isElementVisible(node); //首先检查元素是否可见，如果不可见则不需要后续检查。
       if (nodeData.isVisible) {
-        nodeData.isTopElement = isTopElement(node);
+        nodeData.isTopElement = isTopElement(node); //检查元素是否是在其位置的顶层元素（没有被其他元素覆盖）。
         if (nodeData.isTopElement) {
-          nodeData.isInteractive = isInteractiveElement(node);
+          nodeData.isInteractive = isInteractiveElement(node); //检查元素是否是交互式的（可点击、可输入等）
           if (nodeData.isInteractive) {
             nodeData.isInViewport = true;
-            nodeData.highlightIndex = highlightIndex++;
+            nodeData.highlightIndex = highlightIndex++; //标记元素在视口内，并分配递增的高亮索引。
 
+            //如果启用高亮显示，则高亮此交互元素。若设置了focusHighlightIndex，则只高亮特定索引的元素。
             if (doHighlightElements) {
               if (focusHighlightIndex >= 0) {
                 if (focusHighlightIndex === nodeData.highlightIndex) {
@@ -916,13 +1022,16 @@
     }
 
     // Process children, with special handling for iframes and rich text editors
+    //处理元素的子节点，对特殊元素类型有不同处理。
     if (node.tagName) {
       const tagName = node.tagName.toLowerCase();
 
       // Handle iframes
+      //特殊处理iframe：尝试访问iframe的内部文档，处理其子节点。如果因同源策略无法访问，捕获错误并记录警告。
       if (tagName === "iframe") {
         try {
-          const iframeDoc = node.contentDocument || node.contentWindow?.document;
+          const iframeDoc =
+            node.contentDocument || node.contentWindow?.document;
           if (iframeDoc) {
             for (const child of iframeDoc.childNodes) {
               const domElement = buildDomTree(child, node);
@@ -934,6 +1043,7 @@
         }
       }
       // Handle rich text editors and contenteditable elements
+      //特殊处理富文本编辑器和可编辑内容元素，检测多种富文本编辑器模式（包括TinyMCE）。
       else if (
         node.isContentEditable ||
         node.getAttribute("contenteditable") === "true" ||
@@ -948,6 +1058,7 @@
         }
       }
       // Handle shadow DOM
+      //特殊处理Shadow DOM：标记节点有shadowRoot，并处理其中的子节点。
       else if (node.shadowRoot) {
         nodeData.shadowRoot = true;
         for (const child of node.shadowRoot.childNodes) {
@@ -956,6 +1067,7 @@
         }
       }
       // Handle regular elements
+      //处理常规元素的子节点，递归构建DOM树。
       else {
         for (const child of node.childNodes) {
           const domElement = buildDomTree(child, parentIframe);
@@ -965,7 +1077,12 @@
     }
 
     // Skip empty anchor tags
-    if (nodeData.tagName === 'a' && nodeData.children.length === 0 && !nodeData.attributes.href) {
+    //过滤无用的空锚标签（没有子节点且没有href属性）。
+    if (
+      nodeData.tagName === "a" &&
+      nodeData.children.length === 0 &&
+      !nodeData.attributes.href
+    ) {
       if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
       return null;
     }
@@ -994,54 +1111,67 @@
   // Only process metrics in debug mode
   if (debugMode && PERF_METRICS) {
     // Convert timings to seconds and add useful derived metrics
-    Object.keys(PERF_METRICS.timings).forEach(key => {
+    Object.keys(PERF_METRICS.timings).forEach((key) => {
       PERF_METRICS.timings[key] = PERF_METRICS.timings[key] / 1000;
     });
 
-    Object.keys(PERF_METRICS.buildDomTreeBreakdown).forEach(key => {
-      if (typeof PERF_METRICS.buildDomTreeBreakdown[key] === 'number') {
-        PERF_METRICS.buildDomTreeBreakdown[key] = PERF_METRICS.buildDomTreeBreakdown[key] / 1000;
+    Object.keys(PERF_METRICS.buildDomTreeBreakdown).forEach((key) => {
+      if (typeof PERF_METRICS.buildDomTreeBreakdown[key] === "number") {
+        PERF_METRICS.buildDomTreeBreakdown[key] =
+          PERF_METRICS.buildDomTreeBreakdown[key] / 1000;
       }
     });
 
     // Add some useful derived metrics
     if (PERF_METRICS.buildDomTreeBreakdown.buildDomTreeCalls > 0) {
       PERF_METRICS.buildDomTreeBreakdown.averageTimePerNode =
-        PERF_METRICS.buildDomTreeBreakdown.totalTime / PERF_METRICS.buildDomTreeBreakdown.buildDomTreeCalls;
+        PERF_METRICS.buildDomTreeBreakdown.totalTime /
+        PERF_METRICS.buildDomTreeBreakdown.buildDomTreeCalls;
     }
 
     PERF_METRICS.buildDomTreeBreakdown.timeInChildCalls =
-      PERF_METRICS.buildDomTreeBreakdown.totalTime - PERF_METRICS.buildDomTreeBreakdown.totalSelfTime;
+      PERF_METRICS.buildDomTreeBreakdown.totalTime -
+      PERF_METRICS.buildDomTreeBreakdown.totalSelfTime;
 
     // Add average time per operation to the metrics
-    Object.keys(PERF_METRICS.buildDomTreeBreakdown.domOperations).forEach(op => {
-      const time = PERF_METRICS.buildDomTreeBreakdown.domOperations[op];
-      const count = PERF_METRICS.buildDomTreeBreakdown.domOperationCounts[op];
-      if (count > 0) {
-        PERF_METRICS.buildDomTreeBreakdown.domOperations[`${op}Average`] = time / count;
+    Object.keys(PERF_METRICS.buildDomTreeBreakdown.domOperations).forEach(
+      (op) => {
+        const time = PERF_METRICS.buildDomTreeBreakdown.domOperations[op];
+        const count = PERF_METRICS.buildDomTreeBreakdown.domOperationCounts[op];
+        if (count > 0) {
+          PERF_METRICS.buildDomTreeBreakdown.domOperations[`${op}Average`] =
+            time / count;
+        }
       }
-    });
+    );
 
     // Calculate cache hit rates
-    const boundingRectTotal = PERF_METRICS.cacheMetrics.boundingRectCacheHits + PERF_METRICS.cacheMetrics.boundingRectCacheMisses;
-    const computedStyleTotal = PERF_METRICS.cacheMetrics.computedStyleCacheHits + PERF_METRICS.cacheMetrics.computedStyleCacheMisses;
+    const boundingRectTotal =
+      PERF_METRICS.cacheMetrics.boundingRectCacheHits +
+      PERF_METRICS.cacheMetrics.boundingRectCacheMisses;
+    const computedStyleTotal =
+      PERF_METRICS.cacheMetrics.computedStyleCacheHits +
+      PERF_METRICS.cacheMetrics.computedStyleCacheMisses;
 
     if (boundingRectTotal > 0) {
-      PERF_METRICS.cacheMetrics.boundingRectHitRate = PERF_METRICS.cacheMetrics.boundingRectCacheHits / boundingRectTotal;
+      PERF_METRICS.cacheMetrics.boundingRectHitRate =
+        PERF_METRICS.cacheMetrics.boundingRectCacheHits / boundingRectTotal;
     }
 
     if (computedStyleTotal > 0) {
-      PERF_METRICS.cacheMetrics.computedStyleHitRate = PERF_METRICS.cacheMetrics.computedStyleCacheHits / computedStyleTotal;
+      PERF_METRICS.cacheMetrics.computedStyleHitRate =
+        PERF_METRICS.cacheMetrics.computedStyleCacheHits / computedStyleTotal;
     }
 
-    if ((boundingRectTotal + computedStyleTotal) > 0) {
+    if (boundingRectTotal + computedStyleTotal > 0) {
       PERF_METRICS.cacheMetrics.overallHitRate =
-        (PERF_METRICS.cacheMetrics.boundingRectCacheHits + PERF_METRICS.cacheMetrics.computedStyleCacheHits) /
+        (PERF_METRICS.cacheMetrics.boundingRectCacheHits +
+          PERF_METRICS.cacheMetrics.computedStyleCacheHits) /
         (boundingRectTotal + computedStyleTotal);
     }
   }
 
-  return debugMode ?
-    { rootId, map: DOM_HASH_MAP, perfMetrics: PERF_METRICS } :
-    { rootId, map: DOM_HASH_MAP };
+  return debugMode
+    ? { rootId, map: DOM_HASH_MAP, perfMetrics: PERF_METRICS }
+    : { rootId, map: DOM_HASH_MAP };
 };

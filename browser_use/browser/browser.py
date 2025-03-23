@@ -27,19 +27,19 @@ class BrowserConfig:
 
 	Default values:
 		headless: True
-			Whether to run browser in headless mode
+			Whether to run browser in headless mode	# 是否使用无头模式
 
 		disable_security: True
-			Disable browser security features
+			Disable browser security features  # 是否禁用安全特性
 
 		extra_chromium_args: []
-			Extra arguments to pass to the browser
+			Extra arguments to pass to the browser  # 额外的 Chrome 启动参数
 
 		wss_url: None
-			Connect to a browser instance via WebSocket
+			Connect to a browser instance via WebSocket	# WebSocket 连接 URL
 
 		cdp_url: None
-			Connect to a browser instance via CDP
+			Connect to a browser instance via CDP    # CDP 连接 URL
 
 		chrome_instance_path: None
 			Path to a Chrome instance to use to connect to your normal browser
@@ -63,7 +63,7 @@ class BrowserConfig:
 # @dev By default this is a singleton, but you can create multiple instances if you need to.
 class Browser:
 	"""
-	Playwright browser on steroids.
+	Playwright browser on steroids.#对 Playwright 的增强封装
 
 	This is persistant browser factory that can spawn multiple browser contexts.
 	It is recommended to use only one instance of Browser per your application (RAM usage will grow otherwise).

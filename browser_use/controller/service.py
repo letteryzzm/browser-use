@@ -33,30 +33,38 @@ Context = TypeVar('Context')
 
 
 class Controller(Generic[Context]):
-	def __init__(
+	def __init__(			#定义构造函数接受两个参数	
 		self,
-		exclude_actions: list[str] = [],
-		output_model: Optional[Type[BaseModel]] = None,
-	):
-		self.registry = Registry[Context](exclude_actions)
+		exclude_actions: list[str] = [],#exclude_actions 参数用于在初始化 Controller 类时指定不需要注册的动作。这是一个过滤机制，让您可以选择性地禁用某些预定义的浏览器操作。
+		output_model: Optional[Type[BaseModel]] = None,   
+	):			
+		'''
+		默认值为 None，表示如果调用时不传递该参数，函数会使用 None
+		如果传递了 None，则表示明确不提供 LLM（大语言模型） 
+		如果传递了 BaseChatModel 实例，则表示使用该 LLM 进行页面内容提取。
+		'''												
+			
+		self.registry = Registry[Context](exclude_actions)         #创建了一个泛型的Registry实例来管理所有可用的动作
 
 		"""Register all default browser actions"""
-
-		if output_model is not None:
+			#这个if的作用：如果你自己指定了一个模型，那么就使用你自己的模型，否则使用默认的DoneAction模型
+		if output_model is not None:			#如果output_model参数不为None，即提供了output_model，则创建一个新模型ExtendedOutputModel，继承自output_model，并添加success参数
 			# Create a new model that extends the output model with success parameter
 			class ExtendedOutputModel(output_model):  # type: ignore
 				success: bool = True
 
-			@self.registry.action(
-				'Complete task - with return text and if the task is finished (success=True) or not yet  completly finished (success=False), because last step is reached',
-				param_model=ExtendedOutputModel,
+			@self.registry.action(								#装饰器是Python的一种特殊语法，用于修改函数的行为 将一个函数与特定的"动作"关联起来
+				'Complete task - with return text and if the task is finished (success=True) or not yet  completly finished (success=False), because last step is reached', #告诉使用系统的AI或用户这个动作的用途
+			#完成任务——返回文本以及任务是否完成（success=True 表示已完成，success=False 表示尚未完全完成，因为最后一步已到达）。
+			param_model=ExtendedOutputModel,				#指定该动作需要接收的参数模型类型
 			)
 			async def done(params: ExtendedOutputModel):
 				# Exclude success from the output JSON since it's an internal parameter
+				## 从输出 JSON 中排除 success，因为它是一个内部参数。
 				output_dict = params.model_dump(exclude={'success'})
 				return ActionResult(is_done=True, success=params.success, extracted_content=json.dumps(output_dict))
 		else:
-
+			#如果output_model参数为None，即没有提供output_model，则使用默认的DoneAction模型
 			@self.registry.action(
 				'Complete task - with return text and if the task is finished (success=True) or not yet  completly finished (success=False), because last step is reached',
 				param_model=DoneAction,
@@ -64,6 +72,7 @@ class Controller(Generic[Context]):
 			async def done(params: DoneAction):
 				return ActionResult(is_done=True, success=params.success, extracted_content=params.text)
 
+		#下面这些动作都是预设的
 		# Basic Navigation Actions
 		@self.registry.action(
 			'Search the query in Google in the current tab, the query should be a search query like humans search in Google, concrete and not vague or super long. More the single most important items. ',
@@ -76,6 +85,7 @@ class Controller(Generic[Context]):
 			msg = f'🔍  Searched for "{params.query}" in Google'
 			logger.info(msg)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
+#await 用于异步编程，因为浏览器操作（如加载页面、点击按钮等）需要时间来完成，而我们不希望程序在等待时完全阻塞。
 
 		@self.registry.action('Navigate to URL in the current tab', param_model=GoToUrlAction)
 		async def go_to_url(params: GoToUrlAction, browser: BrowserContext):
@@ -102,25 +112,31 @@ class Controller(Generic[Context]):
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		# Element Interaction Actions
-		@self.registry.action('Click element', param_model=ClickElementAction)
+		@self.registry.action('Click element', param_model=ClickElementAction)#装饰器注册一个名为"Click element"的动作
 		async def click_element(params: ClickElementAction, browser: BrowserContext):
 			session = await browser.get_session()
+		#定义异步函数click_element，接收两个参数：
+			#params: 点击元素动作的参数，类型为ClickElementAction
+			#browser: 浏览器上下文，类型为BrowserContext
 
 			if params.index not in await browser.get_selector_map():
 				raise Exception(f'Element with index {params.index} does not exist - retry or use alternative actions')
+				#检查要点击的元素索引是否存在于选择器映射中，如果不存在，抛出异常，建议重试或使用其他操作
 
-			element_node = await browser.get_dom_element_by_index(params.index)
-			initial_pages = len(session.context.pages)
+			element_node = await browser.get_dom_element_by_index(params.index)#通过索引获取DOM元素节点
+			initial_pages = len(session.context.pages)#记录点击前的页面数量，用于后续检测是否打开了新标签页
 
 			# if element has file uploader then dont click
 			if await browser.is_file_uploader(element_node):
 				msg = f'Index {params.index} - has an element which opens file upload dialog. To upload files please use a specific function to upload files '
 				logger.info(msg)
 				return ActionResult(extracted_content=msg, include_in_memory=True)
+			#检查元素是否为文件上传器，如果是，则不执行点击操作，而是返回提示信息，建议使用专门的文件上传功能
+			#告诉用户不支持上传文件，需要你自己定义一个function去上传
 
-			msg = None
+			msg = None#初始化消息变量
 
-			try:
+			try:#开始try块，处理点击元素可能出现的异常
 				download_path = await browser._click_element_node(element_node)
 				if download_path:
 					msg = f'💾  Downloaded file to {download_path}'
@@ -129,13 +145,13 @@ class Controller(Generic[Context]):
 
 				logger.info(msg)
 				logger.debug(f'Element xpath: {element_node.xpath}')
-				if len(session.context.pages) > initial_pages:
+				if len(session.context.pages) > initial_pages:#检查是否有新标签页打开(通过比较点击前后的页面数)
 					new_tab_msg = 'New tab opened - switching to it'
 					msg += f' - {new_tab_msg}'
 					logger.info(new_tab_msg)
 					await browser.switch_to_tab(-1)
-				return ActionResult(extracted_content=msg, include_in_memory=True)
-			except Exception as e:
+				return ActionResult(extracted_content=msg, include_in_memory=True)#返回操作结果，包含执行消息，并设置将消息包含在内存中
+			except Exception as e:	#捕获异常并记录警告日志，表明元素可能不可点击，可能是页面已经改变
 				logger.warning(f'Element not clickable with index {params.index} - most likely the page changed')
 				return ActionResult(error=str(e))
 
@@ -473,8 +489,8 @@ class Controller(Generic[Context]):
 		return self.registry.action(description, **kwargs)
 
 	# Act --------------------------------------------------------------------
-
-	@time_execution_sync('--act')
+	#用于异步执行一个已注册的动作
+	@time_execution_sync('--act')		
 	async def act(
 		self,
 		action: ActionModel,
@@ -487,8 +503,8 @@ class Controller(Generic[Context]):
 		context: Context | None = None,
 	) -> ActionResult:
 		"""Execute an action"""
-
-		try:
+		#执行action
+		try:	
 			for action_name, params in action.model_dump(exclude_unset=True).items():
 				if params is not None:
 					# with Laminar.start_as_current_span(
@@ -510,7 +526,7 @@ class Controller(Generic[Context]):
 					)
 
 					# Laminar.set_span_output(result)
-
+					#返回的各种情况
 					if isinstance(result, str):
 						return ActionResult(extracted_content=result)
 					elif isinstance(result, ActionResult):

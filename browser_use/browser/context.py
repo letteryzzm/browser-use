@@ -53,62 +53,72 @@ class BrowserContextConfig:
 
 	Default values:
 	    cookies_file: None
-	        Path to cookies file for persistence
+	        Path to cookies file for persistence	Cookie 持久化文件路径
 
 	        disable_security: True
-	                Disable browser security features
+	                Disable browser security features	禁用浏览器安全特性 (默认启用)
 
 	    minimum_wait_page_load_time: 0.5
 	        Minimum time to wait before getting page state for LLM input
+			页面加载最小等待时间 (秒，用于LLM输入)
 
 	        wait_for_network_idle_page_load_time: 1.0
 	                Time to wait for network requests to finish before getting page state.
 	                Lower values may result in incomplete page loads.
+					网络空闲等待时间 (过短可能导致加载不全)
 
 	    maximum_wait_page_load_time: 5.0
 	        Maximum time to wait for page load before proceeding anyway
+			页面加载最大超时时间 (强制继续
 
 	    wait_between_actions: 1.0
-	        Time to wait between multiple per step actions
+	        Time to wait between multiple per step actions	连续操作间隔时间 (秒)
 
 	    browser_window_size: {
 	            'width': 1280,
 	            'height': 1100,
 	        }
-	        Default browser window size
+	        Default browser window size	浏览器窗口尺寸
 
 	    no_viewport: False
-	        Disable viewport
+	        Disable viewport	禁用视口设置
 
 	    save_recording_path: None
-	        Path to save video recordings
+	        Path to save video recordings	屏幕录制保存路径
 
 	    save_downloads_path: None
-	        Path to save downloads to
+	        Path to save downloads to	文件下载保存路径
 
 	    trace_path: None
 	        Path to save trace files. It will auto name the file with the TRACE_PATH/{context_id}.zip
-
+			追踪文件保存路径 (自动命名格式: TRACE_PATH/{context_id}.zip)
+			
 	    locale: None
 	        Specify user locale, for example en-GB, de-DE, etc. Locale will affect navigator.language value, Accept-Language request header value as well as number and date formatting rules. If not provided, defaults to the system default locale.
+			区域设置 (如 en-GB/de-DE)，影响语言、日期格式等
 
 	    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36'
 	        custom user agent to use.
+			自定义用户代理
 
 	    highlight_elements: True
 	        Highlight elements in the DOM on the screen
+			高亮页面 DOM 元素
 
 	    viewport_expansion: 500
 	        Viewport expansion in pixels. This amount will increase the number of elements which are included in the state what the LLM will see. If set to -1, all elements will be included (this leads to high token usage). If set to 0, only the elements which are visible in the viewport will be included.
+			视口扩展像素 (-1=包含所有元素/0=仅可视区域)			#这个参数控制页面内容采集范围
 
 	    allowed_domains: None
 	        List of allowed domains that can be accessed. If None, all domains are allowed.
 	        Example: ['example.com', 'api.example.com']
+			允许访问的域名白名单 (None 允许所有)
 
 	    include_dynamic_attributes: bool = True
 	        Include dynamic attributes in the CSS selector. If you want to reuse the css_selectors, it might be better to set this to False.
+			包含动态 CSS 属性 (设为 False 可复用选择器)
 	"""
-
+	#管理浏览器会话的各种配置
 	cookies_file: str | None = None
 	minimum_wait_page_load_time: float = 0.25
 	wait_for_network_idle_page_load_time: float = 0.5
@@ -171,23 +181,27 @@ class BrowserContext:
 
 	async def __aenter__(self):
 		"""Async context manager entry"""
+		#进入上下文时自动初始化
 		await self._initialize_session()
 		return self
 
 	async def __aexit__(self, exc_type, exc_val, exc_tb):
 		"""Async context manager exit"""
+		#退出上下文时自动清理
 		await self.close()
 
 	@time_execution_async('--close')
 	async def close(self):
 		"""Close the browser instance"""
+		#安全地关闭浏览器会话，确保所有资源正确释放，并保存必要的状态
 		logger.debug('Closing browser context')
 
-		try:
+		try:#(进行debug调试，如果下面的这些操作出问题了就记录进日志)
 			if self.session is None:
 				return
 
 			# Then remove CDP protocol listeners
+			#处理CDP（Chrome DevTools Protocol）事件监听器的清理
 			if self._page_event_handler and self.session.context:
 				try:
 					# This actually sends a CDP command to unsubscribe
@@ -198,14 +212,16 @@ class BrowserContext:
 
 			await self.save_cookies()
 
-			if self.config.trace_path:
+			if self.config.trace_path:#如果启用了跟踪功能
 				try:
 					await self.session.context.tracing.stop(path=os.path.join(self.config.trace_path, f'{self.context_id}.zip'))
+					#文件名基于上下文ID生成，确保唯一性
 				except Exception as e:
 					logger.debug(f'Failed to stop tracing: {e}')
+					#如果失败，捕获异常并记录日志
 
 			# This is crucial - it closes the CDP connection
-			if not self.config._force_keep_context_alive:
+			if not self.config._force_keep_context_alive:#核心关闭操作
 				try:
 					await self.session.context.close()
 				except Exception as e:
@@ -215,15 +231,20 @@ class BrowserContext:
 			# Dereference everything
 			self.session = None
 			self._page_event_handler = None
-
-	def __del__(self):
+	'''
+		异常处理策略：每个潜在失败点都有单独的try-except块，确保一个操作失败不会阻止其他清理操作
+		优雅降级：即使部分关闭操作失败，方法仍继续执行其余清理步骤
+		资源释放保证：finally块确保即使发生异常，资源引用也会被清除
+		条件执行：根据配置选项和当前状态有条件地执行某些操作
+	'''
+	def __del__(self):#当对象被垃圾回收时会被调用
 		"""Cleanup when object is destroyed"""
 		if not self.config._force_keep_context_alive and self.session is not None:
 			logger.debug('BrowserContext was not properly closed before destruction')
 			try:
 				# Use sync Playwright method for force cleanup
-				if hasattr(self.session.context, '_impl_obj'):
-					asyncio.run(self.session.context._impl_obj.close())
+				if hasattr(self.session.context, '_impl_obj'):#__del__是同步方法，不能直接使用await；所以用asyncio.run()创建一个新的事件循环运行异步函数，适合这种一次性清理场景
+					asyncio.run(self.session.context._impl_obj.close())#_impl_obj是Playwright库的实现细节，不是高级API，更直接地关闭底层连接
 
 				self.session = None
 				gc.collect()
@@ -831,6 +852,8 @@ class BrowserContext:
 		"""
 		Removes all highlight overlays and labels created by the highlightElement function.
 		Handles cases where the page might be closed or inaccessible.
+		删除由HighlightElement函数创建的所有高亮叠加和标签。
+		处理页面可能关闭或无法访问的情况
 		"""
 		try:
 			page = await self.get_current_page()

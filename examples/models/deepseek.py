@@ -10,7 +10,7 @@ from browser_use import Agent
 # dotenv
 load_dotenv()
 
-api_key = os.getenv('DEEPSEEK_API_KEY', '')
+api_key = os.getenv('DEEPSEEK_API_KEY', 'sk-522b7a6cf19543efa0e29c075077d4a7')
 if not api_key:
 	raise ValueError('DEEPSEEK_API_KEY is not set')
 

@@ -311,7 +311,7 @@ class Agent(Generic[Context]):
 
 	async def _raise_if_stopped_or_paused(self) -> None:
 		"""Utility function that raises an InterruptedError if the agent is stopped or paused."""
-
+		#如果代理停止或暂停，则引发InterruptedError的实用程序函数
 		if self.register_external_agent_status_raise_error_callback:
 			if await self.register_external_agent_status_raise_error_callback():
 				raise InterruptedError
@@ -324,6 +324,9 @@ class Agent(Generic[Context]):
 	@time_execution_async('--step (agent)')
 	async def step(self, step_info: Optional[AgentStepInfo] = None) -> None:
 		"""Execute one step of the task"""
+		#完成一步任务
+
+		#初始化几个变量
 		logger.info(f'📍 Step {self.state.n_steps}')
 		state = None
 		model_output = None
@@ -332,16 +335,19 @@ class Agent(Generic[Context]):
 		tokens = 0
 
 		try:
-			state = await self.browser_context.get_state()
+			state = await self.browser_context.get_state()#获取浏览器的当前状态
 
-			await self._raise_if_stopped_or_paused()
+			await self._raise_if_stopped_or_paused()#检查代理是否应该停止或暂停
 
 			self._message_manager.add_state_message(state, self.state.last_result, step_info, self.settings.use_vision)
+			#将当前状态、上一步的结果和步骤信息添加到消息管理器中，消息管理器维护代理与模型之间的对话
 
 			# Run planner at specified intervals if planner is configured
+			#如果配置了规划器，则以指定的时间间隔运行规划器(没太看懂这个时间间隔运行规划器是干嘛的)
 			if self.settings.planner_llm and self.state.n_steps % self.settings.planner_interval == 0:
 				plan = await self._run_planner()
 				# add plan before last state message
+				#在最后一条状态消息之前添加计划
 				self._message_manager.add_plan(plan, position=-1)
 
 			if step_info and step_info.is_last_step():
@@ -353,41 +359,47 @@ class Agent(Generic[Context]):
 				logger.info('Last step finishing up')
 				self._message_manager._add_message_with_tokens(HumanMessage(content=msg))
 				self.AgentOutput = self.DoneAgentOutput
+			#如果这是最后一步，添加特殊指令告诉模型这是最后一步，要求它只使用"done"动作，并根据任务完成情况设置成功或失败标志。同时切换输出类型为 DoneAgentOutput
 
 			input_messages = self._message_manager.get_messages()
 			tokens = self._message_manager.state.history.current_tokens
 
 			try:
 				model_output = await self.get_next_action(input_messages)
-
+				#调用模型，获取下一步要执行的动作
 				self.state.n_steps += 1
 
 				if self.register_new_step_callback:
 					await self.register_new_step_callback(state, model_output, self.state.n_steps)
+				#如果注册了步骤回调函数，调用它并传递当前状态、模型输出和步骤编号
 
 				if self.settings.save_conversation_path:
 					target = self.settings.save_conversation_path + f'_{self.state.n_steps}.txt'
 					save_conversation(input_messages, model_output, target, self.settings.save_conversation_path_encoding)
+				#如果配置了保存对话，将当前对话保存到文件中
 
 				self._message_manager._remove_last_state_message()  # we dont want the whole state in the chat history
+				#从消息历史中移除最后的状态消息（可能太大），避免累积过多的状态信息
 
 				await self._raise_if_stopped_or_paused()
 
 				self._message_manager.add_model_output(model_output)
 			except Exception as e:
 				# model call failed, remove last state message from history
+				#如果模型调用出错，移除最后的状态消息，然后重新抛出异常
 				self._message_manager._remove_last_state_message()
 				raise e
 
 			result: list[ActionResult] = await self.multi_act(model_output.action)
-
+		#执行模型输出中指定的动作，使用 multi_act 方法
 			self.state.last_result = result
 
 			if len(result) > 0 and result[-1].is_done:
 				logger.info(f'📄 Result: {result[-1].extracted_content}')
+			#如果最后一个结果标记为已完成，记录其内容，使用文档emoji（📄）增加可视性。
 
 			self.state.consecutive_failures = 0
-
+			#重置连续失败计数，因为这一步成功了
 		except InterruptedError:
 			logger.debug('Agent paused')
 			self.state.last_result = [
@@ -396,9 +408,11 @@ class Agent(Generic[Context]):
 				)
 			]
 			return
+		#处理中断异常，记录代理被暂停的信息，设置带有错误消息的结果，并提前返回
 		except Exception as e:
 			result = await self._handle_step_error(e)
 			self.state.last_result = result
+		#处理其他异常，调用错误处理方法，并保存错误结果。
 
 		finally:
 			step_end_time = time.time()
@@ -536,6 +550,7 @@ class Agent(Generic[Context]):
 
 	def _log_agent_run(self) -> None:
 		"""Log the agent run"""
+		#记录代理运行的开始，可能包括任务信息、时间戳等
 		logger.info(f'🚀 Starting task: {self.task}')
 
 		logger.debug(f'Version: {self.version}, Source: {self.source}')
@@ -576,22 +591,26 @@ class Agent(Generic[Context]):
 	@time_execution_async('--run (agent)')
 	async def run(self, max_steps: int = 100) -> AgentHistoryList:
 		"""Execute the task with maximum number of steps"""
-		try:
+		#定义一个异步方法 run，接受一个可选参数 max_steps（默认为100），表示最大执行步骤数。返回类型是 AgentHistoryList，用于记录代理执行的历史
+		try:#开始一个 try-finally 块，确保无论执行过程中是否出现异常，都能执行后面finally代码里的必要的清理操作
 			self._log_agent_run()
-
-			# Execute initial actions if provided
+			#记录代理运行的开始，可能包括任务信息、时间戳等
+			# Execute initial actions if provided；执行提供的动作
 			if self.initial_actions:
 				result = await self.multi_act(self.initial_actions, check_for_new_elements=False)
 				self.state.last_result = result
+			#如果有预设的初始操作（initial_actions），先执行这些操作。调用之前我们讨论过的 multi_act 方法，并禁用新元素检查。将结果存储在代理状态中
+			#初始操作不涉及元素检查
 
 			for step in range(max_steps):
 				# Check if we should stop due to too many failures
 				if self.state.consecutive_failures >= self.settings.max_failures:
 					logger.error(f'❌ Stopping due to {self.settings.max_failures} consecutive failures')
 					break
+				#检查连续失败次数，如果超过设定阈值，记录错误并中断执行。
 
-				# Check control flags before each step
-				if self.state.stopped:
+				# Check control flags before each step； 在每个步骤之前检查控制标志
+				if self.state.stopped:#这个参数在下面的stop函数里，由日志信息决定他的ture&false
 					logger.info('Agent stopped')
 					break
 
@@ -599,12 +618,15 @@ class Agent(Generic[Context]):
 					await asyncio.sleep(0.2)  # Small delay to prevent CPU spinning
 					if self.state.stopped:  # Allow stopping while paused
 						break
+				#如果代理被暂停，进入等待循环，每0.2秒检查一次是否恢复或停止。这样设计可以响应外部控制命令，同时避免CPU资源浪费
 
 				step_info = AgentStepInfo(step_number=step, max_steps=max_steps)
 				await self.step(step_info)
+				#步骤信息对象，包含当前步骤号和最大步骤数，然后执行单个步骤
 
 				if self.state.history.is_done():
 					if self.settings.validate_output and step < max_steps - 1:
+					#如果启用了输出验证且还有步骤可用，验证输出结果。如果验证失败，继续下一个步骤
 						if not await self._validate_output():
 							continue
 
@@ -616,6 +638,7 @@ class Agent(Generic[Context]):
 			return self.state.history
 		finally:
 			self.telemetry.capture(
+				#捕获并记录代理结束的遥测事件，包含多项执行统计信息，如执行是否成功、步骤数、错误信息、token 消耗和总执行时间等
 				AgentEndTelemetryEvent(
 					agent_id=self.state.agent_id,
 					is_done=self.state.history.is_done(),
@@ -628,17 +651,17 @@ class Agent(Generic[Context]):
 				)
 			)
 
-			if not self.injected_browser_context:
+			if not self.injected_browser_context:#如果浏览器上下文不是从外部注入的，关闭它以释放资源
 				await self.browser_context.close()
 
-			if not self.injected_browser and self.browser:
+			if not self.injected_browser and self.browser:#如果浏览器实例不是从外部注入的且存在，关闭它以释放资源
 				await self.browser.close()
 
 			if self.settings.generate_gif:
 				output_path: str = 'agent_history.gif'
 				if isinstance(self.settings.generate_gif, str):
 					output_path = self.settings.generate_gif
-
+			#如果启用了 GIF 生成功能，创建一个可视化的执行历史 GIF 文件。根据设置，使用默认路径或指定的路径。
 				create_history_gif(task=self.task, history=self.state.history, output_path=output_path)
 
 	# @observe(name='controller.multi_act')
@@ -649,27 +672,31 @@ class Agent(Generic[Context]):
 		check_for_new_elements: bool = True,
 	) -> list[ActionResult]:
 		"""Execute multiple actions"""
-		results = []
+		results = []#初始化一个空列表来存储每个操作的结果
 
-		cached_selector_map = await self.browser_context.get_selector_map()
+		cached_selector_map = await self.browser_context.get_selector_map() 
+		#异步获取当前页面的元素选择器映射（selector map），这是一个当前页面元素的索引
 		cached_path_hashes = set(e.hash.branch_path_hash for e in cached_selector_map.values())
-
+		#从选择器映射中提取所有元素的分支路径哈希值
 		await self.browser_context.remove_highlights()
+		#删除由HighlightElement函数创建的所有高亮叠加和标签。处理页面可能关闭或无法访问的情况
 
-		for i, action in enumerate(actions):
+		for i, action in enumerate(actions):#遍历操作列表
 			if action.get_index() is not None and i != 0:
-				new_state = await self.browser_context.get_state()
+				new_state = await self.browser_context.get_state()#如果不是首个动作即不是新的标签页，就获取当前的状态（因为不是首个动作，说明执行了一个动作，需要更新状态
 				new_path_hashes = set(e.hash.branch_path_hash for e in new_state.selector_map.values())
 				if check_for_new_elements and not new_path_hashes.issubset(cached_path_hashes):
+					#如果页面有新元素出现
 					# next action requires index but there are new elements on the page
+					#记录日志，添加一个结果说明页面出现了变化，并中断操作循环。这是一种安全机制，防止在页面变化后执行可能不再有效的操作
 					msg = f'Something new appeared after action {i} / {len(actions)}'
 					logger.info(msg)
 					results.append(ActionResult(extracted_content=msg, include_in_memory=True))
 					break
-
+			
 			await self._raise_if_stopped_or_paused()
-
-			result = await self.controller.act(
+			#检查操作是否应该停止或暂停，是的话执行InterruptedError（os系统操作函数）相当于用户的ctrl+c行为
+			result = await self.controller.act(#调用控制器的 act 方法，传递多个参数，包括当前操作、浏览器上下文、语言模型、敏感数据、可用文件路径和上下文
 				action,
 				self.browser_context,
 				self.settings.page_extraction_llm,
@@ -678,15 +705,16 @@ class Agent(Generic[Context]):
 				context=self.context,
 			)
 
-			results.append(result)
+			results.append(result)#将操作结果添加到开始时创建的结果列表中
 
 			logger.debug(f'Executed action {i + 1} / {len(actions)}')
 			if results[-1].is_done or results[-1].error or i == len(actions) - 1:
 				break
+				#如果最后一个操作结果标记为已完成、发生错误，或者这是最后一个操作，则中断循环
 
 			await asyncio.sleep(self.browser_context.config.wait_between_actions)
 			# hash all elements. if it is a subset of cached_state its fine - else break (new elements on page)
-
+			#如果新元素集是旧集合的子集，继续执行；否则停止，因为页面有变化。
 		return results
 
 	async def _validate_output(self) -> bool:
@@ -910,19 +938,25 @@ class Agent(Generic[Context]):
 
 	async def _run_planner(self) -> Optional[str]:
 		"""Run the planner to analyze state and suggest next steps"""
+		#运行计划程序以分析状态并建议下一步
 		# Skip planning if no planner_llm is set
 		if not self.settings.planner_llm:
 			return None
 
 		# Create planner message history using full message history
+		#使用完整的消息历史记录创建计划者消息历史记录
 		planner_messages = [
 			PlannerPrompt(self.controller.registry.get_prompt_description()).get_system_message(),
-			*self._message_manager.get_messages()[1:],  # Use full message history except the first
+			*self._message_manager.get_messages()[1:],  
+			#首先添加一个系统消息，使用 PlannerPrompt 类和控制器的注册表中的提示描述（就是控制器里的提示词描述）
+			# Use full message history except the first
+			#然后添加完整的消息历史（除了第一个消息，通常是系统消息）
 		]
 
 		if not self.settings.use_vision_for_planner and self.settings.use_vision:
 			last_state_message: HumanMessage = planner_messages[-1]
 			# remove image from last state message
+			#如果代理设置了使用视觉功能，但计划器不应使用视觉功能，那么需要处理最后一个状态消息（即去掉图片信息，保留文字
 			new_msg = ''
 			if isinstance(last_state_message.content, list):
 				for msg in last_state_message.content:
@@ -941,14 +975,16 @@ class Agent(Generic[Context]):
 		response = await self.settings.planner_llm.ainvoke(planner_messages)
 		plan = str(response.content)
 		# if deepseek-reasoner, remove think tags
+		#如果使用的是 "deepseek-reasoner" 模型，调用一个辅助方法 _remove_think_tags 移除响应中的思考标签。这些标签可能是模型输出的一部分，但不需要包含在最终计划中。
+		#去掉推理模型中的think内容
 		if self.planner_model_name == 'deepseek-reasoner':
 			plan = self._remove_think_tags(plan)
-		try:
+		try:#尝试将计划解析为 JSON 对象，如果成功，以格式化的方式记录计划内容。
 			plan_json = json.loads(plan)
 			logger.info(f'Planning Analysis:\n{json.dumps(plan_json, indent=4)}')
-		except json.JSONDecodeError:
+		except json.JSONDecodeError:#如果计划不是有效的 JSON 格式，直接记录原始计划文本。
 			logger.info(f'Planning Analysis:\n{plan}')
-		except Exception as e:
+		except Exception as e:#处理其他可能的异常，记录错误信息和原始计划。
 			logger.debug(f'Error parsing planning analysis: {e}')
 			logger.info(f'Plan: {plan}')
 
